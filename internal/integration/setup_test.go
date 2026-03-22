@@ -158,8 +158,8 @@ func (s *PaymentsSuite) startApp(ctx context.Context, pgDSN, redisAddr string, k
 		KafkaBrokers: kafkaBrokers,
 		Form3BaseURL: s.form3Server.URL,
 	})
-	s.Require().NoError(err, "start app runtime")
 	s.appRuntime = appRuntime
+	s.Require().NoError(err, "start app runtime")
 	s.serverURL = appRuntime.BaseURL
 	s.log.Info("setup: app server started")
 }

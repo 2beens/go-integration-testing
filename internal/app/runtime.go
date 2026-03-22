@@ -57,62 +57,36 @@ func Start(ctx context.Context, log *slog.Logger, cfg Config) (*Runtime, error) 
 		return nil, errors.New("kafka brokers are required")
 	}
 
+	runtime := &Runtime{}
+
 	pgStore, err := db.New(ctx, cfg.PostgresDSN)
 	if err != nil {
 		return nil, fmt.Errorf("connect postgres: %w", err)
 	}
-	cleanup := func() {
-		pgStore.Close()
-	}
+	runtime.pgStore = pgStore
 
 	// Note: here we can simulate a bug in the app bootstrap by commenting out the migrations.
 	// Unit tests would still pass, but the app would be broken.
 	// That's why we have integration tests to catch these kinds of bugs.
 	if err := pgStore.RunMigrations(ctx); err != nil {
-		cleanup()
-		return nil, fmt.Errorf("run migrations: %w", err)
+		return runtime, fmt.Errorf("run migrations: %w", err)
 	}
 
 	redisClient, err := redisclient.New(ctx, redisclient.Config{Addr: cfg.RedisAddr})
 	if err != nil {
-		cleanup()
-		return nil, fmt.Errorf("connect redis: %w", err)
+		return runtime, fmt.Errorf("connect redis: %w", err)
 	}
-	cleanup = func() {
-		if err := redisClient.Close(); err != nil {
-			log.Warn("close redis client during startup cleanup", "err", err)
-		}
-		pgStore.Close()
-	}
+	runtime.redisClient = redisClient
 
 	kafkaProducer := kafka.NewProducer(cfg.KafkaBrokers)
-	cleanup = func() {
-		if err := kafkaProducer.Close(); err != nil {
-			log.Warn("close kafka producer during startup cleanup", "err", err)
-		}
-		if err := redisClient.Close(); err != nil {
-			log.Warn("close redis client during startup cleanup", "err", err)
-		}
-		pgStore.Close()
-	}
+	runtime.kafkaProducer = kafkaProducer
 
 	kafkaConsumer := kafka.NewConsumer(kafka.ConsumerConfig{
 		Brokers: cfg.KafkaBrokers,
 		GroupID: kafka.ConsumerGroupID,
 		Topic:   kafka.OutboundPaymentsTopic,
 	})
-	cleanup = func() {
-		if err := kafkaConsumer.Close(); err != nil {
-			log.Warn("close kafka consumer during startup cleanup", "err", err)
-		}
-		if err := kafkaProducer.Close(); err != nil {
-			log.Warn("close kafka producer during startup cleanup", "err", err)
-		}
-		if err := redisClient.Close(); err != nil {
-			log.Warn("close redis client during startup cleanup", "err", err)
-		}
-		pgStore.Close()
-	}
+	runtime.kafkaConsumer = kafkaConsumer
 
 	httpClient := &http.Client{Timeout: 10 * time.Second}
 	form3Client := payment.New(cfg.Form3BaseURL, httpClient)
@@ -123,24 +97,9 @@ func Start(ctx context.Context, log *slog.Logger, cfg Config) (*Runtime, error) 
 
 	listener, err := net.Listen("tcp", cfg.HTTPAddr)
 	if err != nil {
-		cleanup()
-		return nil, fmt.Errorf("listen on %q: %w", cfg.HTTPAddr, err)
+		return runtime, fmt.Errorf("listen on %q: %w", cfg.HTTPAddr, err)
 	}
-	cleanup = func() {
-		if err := listener.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
-			log.Warn("close listener during startup cleanup", "err", err)
-		}
-		if err := kafkaConsumer.Close(); err != nil {
-			log.Warn("close kafka consumer during startup cleanup", "err", err)
-		}
-		if err := kafkaProducer.Close(); err != nil {
-			log.Warn("close kafka producer during startup cleanup", "err", err)
-		}
-		if err := redisClient.Close(); err != nil {
-			log.Warn("close redis client during startup cleanup", "err", err)
-		}
-		pgStore.Close()
-	}
+	runtime.BaseURL = baseURLFromListener(listener)
 
 	httpServer := &http.Server{
 		Handler:      router,
@@ -148,7 +107,9 @@ func Start(ctx context.Context, log *slog.Logger, cfg Config) (*Runtime, error) 
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
+	runtime.httpServer = httpServer
 	serverErr := make(chan error, 1)
+	runtime.serverErr = serverErr
 	go func() {
 		log.Info("starting HTTP server", "addr", listener.Addr().String())
 		if err := httpServer.Serve(listener); !errors.Is(err, http.ErrServerClosed) {
@@ -159,32 +120,23 @@ func Start(ctx context.Context, log *slog.Logger, cfg Config) (*Runtime, error) 
 		}
 	}()
 
+	// Note: here too, we can simulate a bug in the app bootstrap by commenting out the consumer start.
 	runCtx, runCancel := context.WithCancel(context.Background())
 	consumerDone := make(chan struct{})
+	runtime.runCancel = runCancel
+	runtime.consumerDone = consumerDone
 	go func() {
 		defer close(consumerDone)
 		kafka.RunConsumer(runCtx, kafkaConsumer, svc)
 	}()
 
-	runtime := &Runtime{
-		BaseURL:       baseURLFromListener(listener),
-		pgStore:       pgStore,
-		redisClient:   redisClient,
-		kafkaProducer: kafkaProducer,
-		kafkaConsumer: kafkaConsumer,
-		httpServer:    httpServer,
-		serverErr:     serverErr,
-		runCancel:     runCancel,
-		consumerDone:  consumerDone,
-	}
-
-	if err := kafka.WaitForConsumerGroupReady(ctx, cfg.KafkaBrokers[0], kafka.ConsumerGroupID, kafka.OutboundPaymentsTopic, 10*time.Second); err != nil {
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if shutdownErr := runtime.Shutdown(shutdownCtx); shutdownErr != nil {
-			return nil, errors.Join(err, shutdownErr)
-		}
-		return nil, err
+	if err := kafka.WaitForConsumerGroupReady(ctx,
+		cfg.KafkaBrokers[0],
+		kafka.ConsumerGroupID,
+		kafka.OutboundPaymentsTopic,
+		10*time.Second,
+	); err != nil {
+		return runtime, err
 	}
 
 	log.Info("app started", "base_url", runtime.BaseURL)

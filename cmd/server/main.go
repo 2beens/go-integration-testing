@@ -30,16 +30,18 @@ func run(log *slog.Logger) error {
 	defer cancel()
 
 	runtime, err := app.Start(ctx, log, cfg)
+	if runtime != nil {
+		defer func() {
+			shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer shutdownCancel()
+			if err := runtime.Shutdown(shutdownCtx); err != nil {
+				log.Error("shutdown app", "err", err)
+			}
+		}()
+	}
 	if err != nil {
 		return fmt.Errorf("start app: %w", err)
 	}
-	defer func() {
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer shutdownCancel()
-		if err := runtime.Shutdown(shutdownCtx); err != nil {
-			log.Error("shutdown app", "err", err)
-		}
-	}()
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)

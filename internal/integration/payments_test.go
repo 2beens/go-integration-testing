@@ -51,7 +51,7 @@ func (s *PaymentsSuite) TestOutboundPayment_HappyPath() {
 			}
 		}
 		return false
-	}, 10*time.Second, 200*time.Millisecond, "payment with idempotency key %q should be created", idempotencyKey)
+	}, 5*time.Second, 200*time.Millisecond, "payment with idempotency key %q should be created", idempotencyKey)
 
 	// Check the stored payment fields before the webhook changes the status.
 	s.Require().NotEmpty(payment.ID, "payment should be created from Kafka message")
@@ -94,7 +94,7 @@ func (s *PaymentsSuite) TestOutboundPayment_HappyPath() {
 	s.Assert().Equal(outbound.StatusCompleted, paymentAfterWebhook.Status)
 
 	// Consume the emitted payment.status Kafka event by the service and assert its payload matches the webhook outcome (completed).
-	msg := consumeOneMessage(s.T(), s.kafkaBroker, kafka.PaymentStatusTopic, kafkaOffset, 10*time.Second)
+	msg := consumeOneMessage(s.T(), s.kafkaBroker, kafka.PaymentStatusTopic, kafkaOffset, 5*time.Second)
 
 	var event outbound.PaymentStatusEvent
 	s.Require().NoError(json.Unmarshal(msg.Value, &event))
@@ -163,7 +163,7 @@ func (s *PaymentsSuite) TestOutboundPayment_DuplicateIdempotency() {
 		}
 
 		return len(s.form3Recorder.Requests()) >= form3RequestsBefore+1
-	}, 10*time.Second, 100*time.Millisecond, "expected at least %d Form3 requests", form3RequestsBefore+1)
+	}, 5*time.Second, 100*time.Millisecond, "expected at least %d Form3 requests", form3RequestsBefore+1)
 
 	// Confirm Redis now holds the key that should block repeated processing of the same message.
 	exists, err := s.redisClient.IdempotencyKeyExists(ctx, idempotencyKey)
