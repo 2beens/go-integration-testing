@@ -1,0 +1,19 @@
+# Minimal golangci-lint config for CI and local runs.
+# Uses the default "standard" linter set (errcheck, govet, staticcheck, etc.).
+# See https://golangci-lint.run/docs/configuration/file/
+
+version: "2"
+
+linters:
+  default: standard
+  exclusions:
+    rules:
+      # In tests we allow unchecked errors for defer Close() and similar to keep tests readable.
+      - path: _test\.go
+        linters:
+          - errcheck
+
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+  relative-path-mode: gomod

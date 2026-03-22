@@ -1,0 +1,36 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug Unit Tests",
+      "type": "go",
+      "request": "launch",
+      "mode": "test",
+      "program": "${workspaceFolder}/...",
+      "args": ["-v"]
+    },
+    {
+      "name": "Debug Integration Tests",
+      "type": "go",
+      "request": "launch",
+      "mode": "test",
+      "program": "${workspaceFolder}/internal/integration",
+      "args": ["-test.v", "-test.timeout=120s"],
+      "env": {
+        "RUN_INTEGRATION_TESTS": "1"
+      }
+    },
+    {
+      "name": "Debug Server",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/cmd/server",
+      "env": {
+        "POSTGRES_DSN": "postgres://postgres:postgres@localhost:5432/simple_go_service?sslmode=disable",
+        "REDIS_ADDR": "localhost:6379",
+        "KAFKA_BROKER": "localhost:9092"
+      }
+    }
+  ]
+}
