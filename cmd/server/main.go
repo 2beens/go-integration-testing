@@ -25,11 +25,10 @@ func main() {
 }
 
 func run(log *slog.Logger) error {
-	cfg := configFromEnv()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	runtime, err := app.Start(ctx, log, cfg)
+	runtime, err := app.Start(ctx, log)
 	if runtime != nil {
 		defer func() {
 			shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)

@@ -20,15 +20,6 @@ import (
 	redisclient "github.com/2beens/simple-go-service/internal/redis"
 )
 
-// Config contains the runtime dependencies and addresses needed to start the app.
-type Config struct {
-	HTTPAddr     string
-	PostgresDSN  string
-	RedisAddr    string
-	KafkaBrokers []string
-	Form3BaseURL string
-}
-
 // Runtime owns the running app and all resources that must be shut down together.
 type Runtime struct {
 	BaseURL string
@@ -49,10 +40,14 @@ type Runtime struct {
 }
 
 // Start initializes dependencies, starts the HTTP server, and starts the Kafka consumer loop.
-func Start(ctx context.Context, log *slog.Logger, cfg Config) (*Runtime, error) {
+func Start(ctx context.Context, log *slog.Logger) (*Runtime, error) {
+	// Load config from environment variables.
+	cfg := loadConfigFromEnv()
+
 	if log == nil {
 		log = slog.Default()
 	}
+
 	if len(cfg.KafkaBrokers) == 0 {
 		return nil, errors.New("kafka brokers are required")
 	}

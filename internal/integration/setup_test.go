@@ -151,17 +151,25 @@ func (s *PaymentsSuite) startForm3Mock() {
 }
 
 func (s *PaymentsSuite) startApp(ctx context.Context, pgDSN, redisAddr string, kafkaBrokers []string) {
-	appRuntime, err := app.Start(ctx, s.log, app.Config{
-		HTTPAddr:     "127.0.0.1:0",
-		PostgresDSN:  pgDSN,
-		RedisAddr:    redisAddr,
-		KafkaBrokers: kafkaBrokers,
-		Form3BaseURL: s.form3Server.URL,
-	})
+	s.configureAppEnv(pgDSN, redisAddr, kafkaBrokers)
+
+	appRuntime, err := app.Start(ctx, s.log)
 	s.appRuntime = appRuntime
 	s.Require().NoError(err, "start app runtime")
+
 	s.serverURL = appRuntime.BaseURL
 	s.log.Info("setup: app server started")
+}
+
+func (s *PaymentsSuite) configureAppEnv(pgDSN, redisAddr string, kafkaBrokers []string) {
+	s.T().Helper()
+	s.Require().NotEmpty(kafkaBrokers, "kafka brokers are required")
+
+	s.T().Setenv("HTTP_ADDR", "127.0.0.1:0")
+	s.T().Setenv("POSTGRES_DSN", pgDSN)
+	s.T().Setenv("REDIS_ADDR", redisAddr)
+	s.T().Setenv("KAFKA_BROKER", kafkaBrokers[0])
+	s.T().Setenv("FORM3_BASE_URL", s.form3Server.URL)
 }
 
 func (s *PaymentsSuite) TearDownSuite() {
