@@ -42,6 +42,8 @@ type Runtime struct {
 // Start initializes dependencies, starts the HTTP server, and starts the Kafka consumer loop.
 func Start(ctx context.Context, log *slog.Logger) (*Runtime, error) {
 	// Load config from environment variables.
+	// Note: we can change the config keys to simulate misconfiguration and test that the integration tests catch it,
+	// while unit tests would not.
 	cfg := loadConfigFromEnv()
 
 	if log == nil {
