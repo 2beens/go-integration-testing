@@ -2,20 +2,12 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debug Unit Tests",
-      "type": "go",
-      "request": "launch",
-      "mode": "test",
-      "program": "${workspaceFolder}/...",
-      "args": ["-v"]
-    },
-    {
       "name": "Debug Integration Tests",
       "type": "go",
       "request": "launch",
       "mode": "test",
       "program": "${workspaceFolder}/internal/integration",
-      "args": ["-test.v", "-test.timeout=120s"],
+      "args": ["-test.v", "-test.timeout=1200s"],
       "env": {
         "RUN_INTEGRATION_TESTS": "1"
       }
