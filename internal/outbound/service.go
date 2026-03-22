@@ -78,10 +78,6 @@ func (s *Service) HandleOutboundPayment(
 
 	payment := NewPayment(payload, idempotencyKey)
 
-	if err := s.form3.CreatePayment(ctx, payment); err != nil {
-		return Payment{}, fmt.Errorf("create payment with Form3: %w", err)
-	}
-
 	if err := s.repo.Save(ctx, payment); err != nil {
 		return Payment{}, fmt.Errorf("save payment: %w", err)
 	}
@@ -89,6 +85,10 @@ func (s *Service) HandleOutboundPayment(
 	if err := s.idempotency.SetKey(ctx, idempotencyKey); err != nil {
 		// Non-fatal: payment is already in DB; log and continue (idempotency may allow duplicate on retry).
 		s.log.WarnContext(ctx, "failed to set idempotency key in Redis", "idempotency_key", idempotencyKey, "err", err)
+	}
+
+	if err := s.form3.CreatePayment(ctx, payment); err != nil {
+		return Payment{}, fmt.Errorf("create payment with Form3: %w", err)
 	}
 
 	s.log.InfoContext(ctx, fmt.Sprintf("outbound payment [%s] created with idempotency key: %s", payment.ID, idempotencyKey))

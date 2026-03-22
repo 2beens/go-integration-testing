@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -48,7 +49,7 @@ func (c *Client) IdempotencyKeyExists(ctx context.Context, key string) (bool, er
 	k := idempotencyKeyPrefix + key
 	_, err := c.rdb.Get(ctx, k).Result()
 	if err != nil {
-		if err == goredis.Nil {
+		if errors.Is(err, goredis.Nil) {
 			return false, nil
 		}
 		return false, fmt.Errorf("get %s: %w", k, err)
