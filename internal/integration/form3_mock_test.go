@@ -49,6 +49,9 @@ func (r *form3RequestRecorder) Requests() []form3CreateRequest {
 
 func newForm3MockServer(recorder *form3RequestRecorder) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Log the received request.
+		fmt.Printf(" --> form3 mock server received request: %s %s\n", r.Method, r.URL.Path)
+
 		if r.URL.Path != "/payments" || r.Method != http.MethodPost {
 			w.WriteHeader(http.StatusNotFound)
 			return
