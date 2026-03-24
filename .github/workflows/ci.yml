@@ -16,6 +16,8 @@ jobs:
     permissions:
       contents: read
     steps:
+      # Pin to an immutable commit SHA instead of a mutable tag to reduce
+      # supply-chain risk if a tag is ever moved or compromised.
       # actions/checkout v4.2.2
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
