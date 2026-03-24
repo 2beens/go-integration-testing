@@ -119,8 +119,9 @@ func (s *PaymentsSuite) TestOutboundPayment_HappyPath() {
 	s.Assert().Equal(paymentAfterWebhook.Status, got.Status)
 }
 
-// TestOutboundPayment_DuplicateIdempotency: same Kafka message key twice results in one payment only.
-func (s *PaymentsSuite) TestOutboundPayment_DuplicateIdempotency() {
+// TestOutboundPayment_Duplicate: tests that duplicate messages with the same idempotency key
+// do not create multiple payments or multiple Form3 calls.
+func (s *PaymentsSuite) TestOutboundPayment_Duplicate() {
 	ctx := s.T().Context()
 
 	idempotencyKey := "idempotency-test-dup-1"
