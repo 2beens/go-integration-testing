@@ -78,7 +78,7 @@ func (s *PaymentsSuite) TestOutboundPayment_HappyPath() {
 	s.Assert().True(exists, "idempotency key should be set in Redis")
 
 	// Capture the current status-topic offset so this test reads only the event emitted after the webhook below.
-	kafkaOffset := currentKafkaOffset(s.T(), s.kafkaBroker, kafka.PaymentStatusTopic)
+	kafkaOffset := getCurrentKafkaOffset(s.T(), s.kafkaBroker, kafka.PaymentStatusTopic)
 
 	// Send/simulate the completed webhook that should transition this specific payment to its terminal state (completed).
 	webhookBody, err := json.Marshal(map[string]string{"payment_id": payment.ID, "status": "completed"})
@@ -144,7 +144,7 @@ func (s *PaymentsSuite) TestOutboundPayment_DuplicateIdempotency() {
 	// Wait for the first payment so the test has a concrete payment ID to protect from duplicate creation.
 	var payment outbound.Payment
 	require.Eventually(s.T(), func() bool {
-		payments, err := s.paymentsByIdempotency(ctx, idempotencyKey)
+		payments, err := s.getPaymentsByIdempotency(ctx, idempotencyKey)
 		s.Require().NoError(err)
 		if len(payments) > 0 {
 			payment = payments[0]
@@ -176,7 +176,7 @@ func (s *PaymentsSuite) TestOutboundPayment_DuplicateIdempotency() {
 
 	// Verify the duplicates left the system unchanged: still one payment and still one Form3 call.
 	require.Eventually(s.T(), func() bool {
-		payments, err := s.paymentsByIdempotency(ctx, idempotencyKey)
+		payments, err := s.getPaymentsByIdempotency(ctx, idempotencyKey)
 		s.Require().NoError(err)
 		return assert.Len(s.T(), payments, 1, "expected exactly one payment for idempotency key %q", idempotencyKey) &&
 			assert.Equal(s.T(), payment.ID, payments[0].ID, "payment ID for idempotency key %q", idempotencyKey) &&
@@ -184,12 +184,12 @@ func (s *PaymentsSuite) TestOutboundPayment_DuplicateIdempotency() {
 	}, 3*time.Second, 100*time.Millisecond)
 }
 
-func (s *PaymentsSuite) paymentsByIdempotency(ctx context.Context, idempotencyKey string) ([]outbound.Payment, error) {
+func (s *PaymentsSuite) getPaymentsByIdempotency(ctx context.Context, idempotencyKey string) ([]outbound.Payment, error) {
 	s.T().Helper()
 
 	list, err := s.paymentsRepo.List(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list payments: %w", err)
 	}
 
 	var payments []outbound.Payment

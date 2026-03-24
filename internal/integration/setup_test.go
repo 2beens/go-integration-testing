@@ -174,13 +174,15 @@ func (s *PaymentsSuite) configureAppEnv(pgDSN, redisAddr string, kafkaBrokers []
 
 func (s *PaymentsSuite) TearDownSuite() {
 	ctx := context.Background()
-	if s.log != nil {
-		s.log.Info("teardown: closing resources and terminating containers")
+
+	if s.log == nil {
+		s.log = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	}
+	s.log.Info("teardown: closing resources and terminating containers")
 
 	if s.appRuntime != nil {
 		shutdownCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		if err := s.appRuntime.Shutdown(shutdownCtx); err != nil && s.log != nil {
+		if err := s.appRuntime.Shutdown(shutdownCtx); err != nil {
 			s.log.Warn("shutdown app runtime", "err", err)
 		}
 		cancel()
@@ -189,7 +191,7 @@ func (s *PaymentsSuite) TearDownSuite() {
 		s.form3Server.Close()
 	}
 	if s.redisClient != nil {
-		if err := s.redisClient.Close(); err != nil && s.log != nil {
+		if err := s.redisClient.Close(); err != nil {
 			s.log.Warn("close redis client", "err", err)
 		}
 	}
@@ -197,23 +199,22 @@ func (s *PaymentsSuite) TearDownSuite() {
 		s.pg.Close()
 	}
 	if s.kafkaCtr != nil {
-		if err := s.kafkaCtr.Terminate(ctx); err != nil && s.log != nil {
+		if err := s.kafkaCtr.Terminate(ctx); err != nil {
 			s.log.Warn("terminate kafka container", "err", err)
 		}
 	}
 	if s.redisCtr != nil {
-		if err := s.redisCtr.Terminate(ctx); err != nil && s.log != nil {
+		if err := s.redisCtr.Terminate(ctx); err != nil {
 			s.log.Warn("terminate redis container", "err", err)
 		}
 	}
 	if s.pgCtr != nil {
-		if err := s.pgCtr.Terminate(ctx); err != nil && s.log != nil {
+		if err := s.pgCtr.Terminate(ctx); err != nil {
 			s.log.Warn("terminate postgres container", "err", err)
 		}
 	}
-	if s.log != nil {
-		s.log.Info("teardown: complete")
-	}
+
+	s.log.Info("teardown: complete")
 }
 
 func createKafkaTopic(ctx context.Context, broker, topic string) error {

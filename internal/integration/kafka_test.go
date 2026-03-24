@@ -77,8 +77,8 @@ func consumeOneMessage(t *testing.T, broker, topic string, startOffset int64, ti
 	return msg
 }
 
-// currentKafkaOffset returns the current offset of the given Kafka topic.
-func currentKafkaOffset(t *testing.T, broker, topic string) int64 {
+// getCurrentKafkaOffset returns the current offset of the given Kafka topic.
+func getCurrentKafkaOffset(t *testing.T, broker, topic string) int64 {
 	t.Helper()
 
 	ctx := t.Context()
