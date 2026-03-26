@@ -45,10 +45,15 @@ func Start(ctx context.Context, log *slog.Logger) (*Runtime, error) {
 	// Note: we can change the config keys to simulate misconfiguration and test that the integration tests catch it,
 	// while unit tests would not.
 	cfg := loadConfigFromEnv()
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("validate config: %w", err)
+	}
 
 	if log == nil {
 		log = slog.Default()
 	}
+
+	log.Debug("config loaded", "values", cfg)
 
 	if len(cfg.KafkaBrokers) == 0 {
 		return nil, errors.New("kafka brokers are required")
