@@ -49,6 +49,9 @@ func Start(ctx context.Context, log *slog.Logger) (*Runtime, error) {
 		return nil, fmt.Errorf("validate config: %w", err)
 	}
 
+	// Simulate a bug in the config by appending an invalid string to the Postgres DSN.
+	// cfg.PostgresDSN = cfg.PostgresDSN + "example-of-a-bug-in-the-config"
+
 	if log == nil {
 		log = slog.Default()
 	}
