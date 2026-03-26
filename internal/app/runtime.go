@@ -62,29 +62,27 @@ func Start(ctx context.Context, log *slog.Logger) (*Runtime, error) {
 		return nil, errors.New("kafka brokers are required")
 	}
 
+	var err error
 	runtime := &Runtime{}
 
-	pgStore, err := db.New(ctx, cfg.PostgresDSN)
+	runtime.pgStore, err = db.New(ctx, cfg.PostgresDSN)
 	if err != nil {
 		return nil, fmt.Errorf("connect postgres: %w", err)
 	}
-	runtime.pgStore = pgStore
 
 	// Note: here we can simulate a bug in the app bootstrap by commenting out the migrations.
 	// Unit tests would still pass, but the app would be broken.
 	// That's why we have integration tests to catch these kinds of bugs.
-	if err := pgStore.RunMigrations(ctx); err != nil {
+	if err := runtime.pgStore.RunMigrations(ctx); err != nil {
 		return runtime, fmt.Errorf("run migrations: %w", err)
 	}
 
-	redisClient, err := redisclient.New(ctx, redisclient.Config{Addr: cfg.RedisAddr})
+	runtime.redisClient, err = redisclient.New(ctx, redisclient.Config{Addr: cfg.RedisAddr})
 	if err != nil {
 		return runtime, fmt.Errorf("connect redis: %w", err)
 	}
-	runtime.redisClient = redisClient
 
-	kafkaProducer := kafka.NewProducer(cfg.KafkaBrokers)
-	runtime.kafkaProducer = kafkaProducer
+	runtime.kafkaProducer = kafka.NewProducer(cfg.KafkaBrokers)
 
 	kafkaConsumer := kafka.NewConsumer(kafka.ConsumerConfig{
 		Brokers: cfg.KafkaBrokers,
@@ -95,8 +93,13 @@ func Start(ctx context.Context, log *slog.Logger) (*Runtime, error) {
 
 	httpClient := &http.Client{Timeout: 10 * time.Second}
 	form3Client := payment.New(cfg.Form3BaseURL, httpClient)
-	paymentsRepo := repo.NewPaymentsRepo(pgStore.Pool())
-	svc := outbound.NewService(paymentsRepo, redisClient, form3Client, kafkaProducer)
+
+	svc := outbound.NewService(
+		repo.NewPaymentsRepo(runtime.pgStore.Pool()),
+		runtime.redisClient,
+		form3Client,
+		runtime.kafkaProducer,
+	)
 	handler := api.NewHandler(svc)
 	router := api.NewRouter(handler)
 
@@ -113,6 +116,7 @@ func Start(ctx context.Context, log *slog.Logger) (*Runtime, error) {
 		IdleTimeout:  60 * time.Second,
 	}
 	runtime.httpServer = httpServer
+
 	serverErr := make(chan error, 1)
 	runtime.serverErr = serverErr
 	go func() {
@@ -135,6 +139,8 @@ func Start(ctx context.Context, log *slog.Logger) (*Runtime, error) {
 		kafka.RunConsumer(runCtx, kafkaConsumer, svc)
 	}()
 
+	// Wait for the consumer group to be ready before returning from Start,
+	// so that tests can reliably produce messages immediately after.
 	if err := kafka.WaitForConsumerGroupReady(ctx,
 		cfg.KafkaBrokers[0],
 		kafka.ConsumerGroupID,
@@ -156,6 +162,7 @@ func (r *Runtime) ServerErrors() <-chan error {
 // Shutdown stops the consumer loop, shuts down the HTTP server, and closes all owned resources.
 func (r *Runtime) Shutdown(ctx context.Context) error {
 	r.shutdownOnce.Do(func() {
+		log := slog.Default()
 		var errs []error
 
 		if r.runCancel != nil {
@@ -167,29 +174,35 @@ func (r *Runtime) Shutdown(ctx context.Context) error {
 			case <-ctx.Done():
 				errs = append(errs, fmt.Errorf("wait for kafka consumer stop: %w", ctx.Err()))
 			}
+			log.Info("kafka consumer stopped")
 		}
 		if r.httpServer != nil {
 			if err := r.httpServer.Shutdown(ctx); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				errs = append(errs, fmt.Errorf("shutdown http server: %w", err))
 			}
+			log.Info("http server stopped")
 		}
 		if r.kafkaConsumer != nil {
 			if err := r.kafkaConsumer.Close(); err != nil {
 				errs = append(errs, fmt.Errorf("close kafka consumer: %w", err))
 			}
+			log.Info("kafka consumer closed")
 		}
 		if r.kafkaProducer != nil {
 			if err := r.kafkaProducer.Close(); err != nil {
 				errs = append(errs, fmt.Errorf("close kafka producer: %w", err))
 			}
+			log.Info("kafka producer closed")
 		}
 		if r.redisClient != nil {
 			if err := r.redisClient.Close(); err != nil {
 				errs = append(errs, fmt.Errorf("close redis client: %w", err))
 			}
+			log.Info("redis client closed")
 		}
 		if r.pgStore != nil {
 			r.pgStore.Close()
+			log.Info("pg store closed")
 		}
 
 		r.shutdownErr = errors.Join(errs...)
