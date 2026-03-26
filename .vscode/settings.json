@@ -1,5 +1,6 @@
 {
   "go.testEnvVars": {
     "RUN_INTEGRATION_TESTS": "1"
-  }
+  },
+  "go.testTimeout": "10m"
 }
