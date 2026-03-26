@@ -130,14 +130,14 @@ func Start(ctx context.Context, log *slog.Logger) (*Runtime, error) {
 	}()
 
 	// Note: here too, we can simulate a bug in the app bootstrap by commenting out the consumer start.
-	runCtx, runCancel := context.WithCancel(context.Background())
-	consumerDone := make(chan struct{})
-	runtime.runCancel = runCancel
-	runtime.consumerDone = consumerDone
-	go func() {
-		defer close(consumerDone)
-		kafka.RunConsumer(runCtx, kafkaConsumer, svc)
-	}()
+	// runCtx, runCancel := context.WithCancel(context.Background())
+	// consumerDone := make(chan struct{})
+	// runtime.runCancel = runCancel
+	// runtime.consumerDone = consumerDone
+	// go func() {
+	// 	defer close(consumerDone)
+	// 	kafka.RunConsumer(runCtx, kafkaConsumer, svc)
+	// }()
 
 	// Wait for the consumer group to be ready before returning from Start,
 	// so that tests can reliably produce messages immediately after.
